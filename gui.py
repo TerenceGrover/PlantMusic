@@ -1,4 +1,5 @@
 # potentiometer_gui.py
+#This is to be replaced by Arduino readings
 import tkinter as tk
 from tkinter import Scale, Button
 
