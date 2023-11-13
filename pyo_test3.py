@@ -18,7 +18,7 @@ freq_obj = Sig(value=100)
 mul_obj = Sig(0.5)
 
 # Major scale frequencies (C4 to C5)
-scale_frequencies = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]
+scale_frequencies = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25, 523.26, 587.32, 659.26, 698.46, 784.00, 880.00, 987.76, 1046.50]
 
 def map_adc_to_scale(adc_value):
     index = int((adc_value - 100) / 100)  # Assuming adc_value ranges from 100 to 900
@@ -64,20 +64,20 @@ def check_freq_change():
 metro = Metro(time=0.1).play()
 trig_func = TrigFunc(metro, function=check_freq_change)
 
-h1 = Sine(freq=scale_frequencies, mul=env)
+h1 = Sine(freq=map_adc_to_scale(read_value()), mul=env)
 
 # Harmonizers with some melodic variation
 harmonizer1 = Harmonizer(h1, transpo=5) # Perfect fourth
 harmonizer2 = Harmonizer(h1, transpo=7)  # Perfect fifth
 
 # Apply a chorus for a spacious sound
-# chorus = Chorus(harmonizer1 + harmonizer2, depth=0.5, feedback=0.1, bal=0.5)
+chorus = Chorus(h1 + harmonizer1 + harmonizer2, depth=0.5, feedback=0.1, bal=0.5)
 
 # Use a larger reverb for an ethereal feel
-reverb = Freeverb(harmonizer1 + harmonizer2, size=0.9, damp=0.2, bal=0.5)
+# reverb = Freeverb(chorus, size=0.9, damp=0.2, bal=0.5)
 
 # A delay for cascading echoes
-delay = Delay(reverb, delay=0.5, feedback=0.5, maxdelay=2).out()
+delay = Delay(harmonizer1, delay=0.5, feedback=0.5, maxdelay=2).out()
 
 # Apply a slow-moving low-pass filter for a sweeping effect
 lfo = Sine(freq=0.1).range(250, 5000)
