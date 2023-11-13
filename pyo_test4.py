@@ -26,6 +26,7 @@ harmony_freq = Sig(value=100)
 mul_obj = Sig(0.5)
 
 
+
 def shift_octave(frequency, octave_change):
     return frequency * (2 ** octave_change)
 
@@ -61,20 +62,26 @@ def read_value_thread():
     global reverb_size_melo
     global reverb_size_harmo
     light_value = simulate_light_sensor()
+    scale = get_scale(light_value)
+    counter = 0
 
     while True:
         current_value = read_value()
         # TO REMOVE
         current_value = current_value + random.randint(-2, 2)
-        scale = get_scale(light_value)
         last_value = harmony_freq.get()
 
-        mapped_value = map_adc_to_scale(current_value, scale)
+        if counter % 3 == 0:
+            mapped_value = map_adc_to_scale(current_value, scale)
+        else:
+            mapped_value = harmony_freq.get()
 
         # Update the freq_obj's value to change the frequency of the sine waves
         # Shift melody one octave higher
         melody_freq.setValue(shift_octave(mapped_value, 1))
-        harmony_freq.setValue(mapped_value)  # Harmony stays in original octave
+
+        if counter % 10 == 0:
+            harmony_freq.setValue(shift_octave(mapped_value, -1))
 
         chorus_depth_harmo = map_value(harmony_freq, 100, 900, 0.4, 1)
         chorus_depth_melo = map_value(melody_freq, 100, 900, 0.1, 0.6)
@@ -82,12 +89,14 @@ def read_value_thread():
         reverb_size_melo = map_value(melody_freq, 100, 900, 0.2, 0.7)
         print(f"ADC Value: {current_value}, Mapped Frequency: {mapped_value}")
 
-        time.sleep(0.33)
+        counter+=1
+
+        time.sleep(current_value/1000 + random.uniform(0.05, 0.2))
 
 
 threshold = 25
 # env = Adsr(attack=0.01, decay=0.2, sustain=0.5, release=0.5, mul=mul_obj).play()
-env = Adsr(attack=0.25, decay=0.2, sustain=0.1, release=0.2, mul=1).play()
+env = Adsr(attack=0.6, decay=0.2, sustain=0.3, release=0.5, mul=mul_obj).play()
 
 
 def check_freq_change():
@@ -108,32 +117,36 @@ metro = Metro(time=0.1).play()
 trig_func = TrigFunc(metro, function=check_freq_change)
 
 melody_synth = SuperSaw(freq=melody_freq, mul=env)
-harmony_synth = Sine(freq=harmony_freq, mul=env *
-                     0.7)  # Reduced volume for harmony
+
+# Number of harmonics in the additive synthesizer
+num_harmonics = 3
+# Create an array of sine waves as harmonics
+harmony_synth = [Sine(freq=harmony_freq * (i + 1), mul=env*1.2/num_harmonics) for i in range(num_harmonics)]
+# Sum the harmonics to create the additive synthesis sound
+additive_synth = sum(harmony_synth)
 
 # Harmonizers with some melodic variation
 harmonizer_melo = Harmonizer(melody_synth, transpo=5)  # Perfect fourth
-harmonizer_harmo = Harmonizer(
-    harmony_synth, transpo=7, feedback=feedback)  # Perfect fifth
+harmonizer_harmo = Harmonizer(additive_synth)  # Perfect fifth
 
 # Apply a chorus for a spacious sound
 chorus_melo = Chorus(harmonizer_melo,
-                     depth=chorus_depth_melo, feedback=0.1, bal=0.5)
+                     depth=chorus_depth_melo, bal=0.5)
 chorus_harmo = Chorus(harmonizer_harmo,
-                      depth=chorus_depth_harmo, feedback=0.6, bal=0.5)
+                      depth=chorus_depth_harmo, bal=0.5)
 
 # Use a larger reverb for an ethereal feel
-reverb_melo = Freeverb(chorus_melo, size=reverb_size_melo, damp=0.2, bal=0.5)
+reverb_melo = Freeverb(chorus_melo, size=reverb_size_melo, damp=0.4, bal=0.5)
 reverb_harmo = Freeverb(
-    chorus_harmo, size=reverb_size_harmo, damp=0.9, bal=0.5)
+    chorus_harmo, size=reverb_size_harmo, damp=0.2, bal=0.5)
 
 # A delay for cascading echoes
-delay_melo = Delay(reverb_melo, delay=0.5, feedback=0.1, maxdelay=1)
-delay_harmo = Delay(reverb_harmo, delay=0.6, feedback=0.6, maxdelay=2)
+delay_melo = Delay(reverb_melo, delay=0.5, feedback=0.05, maxdelay=1).out()
+delay_harmo = Delay(reverb_harmo, delay=0.6, feedback=0.3, maxdelay=2)
 
 # Apply a slow-moving low-pass filter for a sweeping effect
-lfo = Sine(freq=0.1).range(250, 5000)
-lpf = ButLP(delay_melo + delay_harmo, freq=lfo).out()
+lfo = Sine(freq=0.2).range(1000, 5000)
+lpf = ButLP(delay_harmo, freq=lfo).out()
 
 # Displays the final waveform
 sp = Scope(delay_melo + delay_harmo)
