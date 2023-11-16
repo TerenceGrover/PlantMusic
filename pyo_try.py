@@ -1,8 +1,11 @@
 from pyo import *
+from random import random
 
 s = Server().boot()
 s.start()
-lfo = Sine(.25, 0, .2, .1)
-a = SineLoop(freq=[400,500], feedback=lfo, mul=.2).out()
+
+# First sound - dynamic spectrum.
+spktrm = Sine(freq=1000, phase=5, mul=1).out()
+
 
 s.gui(locals())

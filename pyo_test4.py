@@ -91,7 +91,7 @@ def read_value_thread():
 
         counter+=1
 
-        time.sleep(current_value/1000 + random.uniform(0.05, 0.2))
+        time.sleep((current_value/1000) ** current_value/100 + random.uniform(0.05, 0.2))
 
 
 threshold = 25
@@ -116,12 +116,12 @@ def check_freq_change():
 metro = Metro(time=0.1).play()
 trig_func = TrigFunc(metro, function=check_freq_change)
 
-melody_synth = SuperSaw(freq=melody_freq, mul=env)
+melody_synth = SuperSaw(freq=melody_freq, mul=env, detune=0.1)
 
 # Number of harmonics in the additive synthesizer
 num_harmonics = 3
 # Create an array of sine waves as harmonics
-harmony_synth = [Sine(freq=harmony_freq * (i + 1), mul=env*1.2/num_harmonics) for i in range(num_harmonics)]
+harmony_synth = [Sine(freq=harmony_freq * (i + 1), mul=env*2/num_harmonics) for i in range(num_harmonics)]
 # Sum the harmonics to create the additive synthesis sound
 additive_synth = sum(harmony_synth)
 
@@ -141,8 +141,8 @@ reverb_harmo = Freeverb(
     chorus_harmo, size=reverb_size_harmo, damp=0.2, bal=0.5)
 
 # A delay for cascading echoes
-delay_melo = Delay(reverb_melo, delay=0.5, feedback=0.05, maxdelay=1).out()
-delay_harmo = Delay(reverb_harmo, delay=0.6, feedback=0.3, maxdelay=2)
+delay_melo = SmoothDelay(reverb_melo, delay=0.5, feedback=0.05, maxdelay=1).out()
+delay_harmo = SmoothDelay(reverb_harmo, delay=0.6, feedback=0.3, maxdelay=2)
 
 # Apply a slow-moving low-pass filter for a sweeping effect
 lfo = Sine(freq=0.2).range(1000, 5000)
