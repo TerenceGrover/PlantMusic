@@ -15,28 +15,34 @@ last_value = 100
 last_significant_change_time = time.time()
 melody_freq = Sig(value=100)
 harmony_freq = Sig(value=100)
-mul_obj = Sig(0.5)
+mul_obj = Sig(0.6)
 major_scale = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]
 minor_scale = [261.63, 293.66, 311.13, 349.23, 392.00, 415.30, 466.16, 523.25]
-threshold = 25
+threshold = 50
 env = Adsr(attack=0.6, decay=0.2, sustain=0.3, release=0.5, mul=mul_obj).play()
 
 # SENSOR READING FUNCTIONS
+
+
 def read_value():
     with open("value.txt", "r") as file:
         return int(file.read().strip())
 
+
 def read_light_sensor():
     # Replace with actual sensor reading logic
-    return random.randint(0, 100)
+    return random.randint(90, 100)
+
 
 def read_moisture_sensor():
     # Replace with actual sensor reading logic
     return random.randint(0, 100)
 
+
 def read_temperature_sensor():
     # Replace with actual sensor reading logic
     return random.randint(0, 100)
+
 
 def read_humidity_sensor():
     # Replace with actual sensor reading logic
@@ -46,13 +52,16 @@ def read_humidity_sensor():
 def shift_octave(frequency, octave_change):
     return frequency * (2 ** octave_change)
 
+
 def get_scale(light_value):
     return minor_scale if light_value < 50 else major_scale
+
 
 def map_adc_to_scale(adc_value, scale):
     index = int((adc_value - 100) / 100)
     index = min(max(index, 0), len(scale) - 1)
     return scale[index]
+
 
 def map_value(input_value, input_min, input_max, output_min, output_max):
     # Linear mapping from input range to output range
@@ -77,28 +86,28 @@ def read_value_thread():
         current_value = current_value + random.randint(-2, 2)
         last_value = harmony_freq.get()
 
-        if counter % 3 == 0:
+        if counter % random.randint(5, 10) == 0:
             mapped_value = map_adc_to_scale(current_value, scale)
         else:
             mapped_value = harmony_freq.get()
 
         # Update the freq_obj's value to change the frequency of the sine waves
         # Shift melody one octave higher
-        melody_freq.setValue(shift_octave(mapped_value, 1))
+        melody_freq.setValue(shift_octave(mapped_value, 0))
 
-        if counter % 10 == 0:
+        if counter % 25 == 0:
             harmony_freq.setValue(shift_octave(mapped_value, -1))
 
         chorus_depth_harmo = map_value(harmony_freq, 100, 900, 0.4, 1)
         chorus_depth_melo = map_value(melody_freq, 100, 900, 0.1, 0.6)
-        reverb_size_harmo = map_value(harmony_freq, 100, 900, 0.4, 1)
-        reverb_size_melo = map_value(melody_freq, 100, 900, 0.2, 0.7)
+        reverb_size_harmo = map_value(harmony_freq, 100, 900, 0.6, 1)
+        reverb_size_melo = map_value(melody_freq, 100, 900, 0.2, read_humidity_sensor()/100)
         print(f"ADC Value: {current_value}, Mapped Frequency: {mapped_value}")
 
         counter += 1
 
         time.sleep((current_value/1000) ** current_value /
-                   100 + random.uniform(0.05, 0.2))
+                   light_value + random.uniform(0.05, 0.2))
 
 
 # FREQ CHANGE FUNCTION
@@ -119,7 +128,10 @@ def check_freq_change():
 # Use a Metro to regularly check the difference
 metro = Metro(time=0.1).play()
 trig_func = TrigFunc(metro, function=check_freq_change)
-melody_synth = SuperSaw(freq=melody_freq, mul=env, detune=0.1)
+if read_humidity_sensor() < 50:
+    melody_synth = SineLoop(freq=melody_freq, mul=env)
+else:
+    melody_synth = SuperSaw(freq=melody_freq, mul=env)
 # Number of harmonics in the additive synthesizer
 num_harmonics = 3
 
