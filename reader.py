@@ -1,19 +1,19 @@
-# value_reader.py
-import time
-import random
+import serial 
 
-def read_value():
-    with open("value.txt", "r") as file:
-        return int(file.read().strip())
+def init_arduino(port):
+    # Initialize the Arduino connection
+    # The baud rate should match the rate set in your Arduino program
+    arduino = serial.Serial(port, 9600, timeout=1)
+    print('Arduino initialized', arduino)
+    return arduino
 
-last_value = None
-
-while True:
-    current_value = read_value()
-    if current_value != last_value:
-        print(f"ADC Value: {current_value}")
-        last_value = current_value
-    else :
-        prev = current_value + random.randint(-2, 2)
-        print(f"ADC Value: {prev}")
-    time.sleep(0.33)
+def read_sensor_data(arduino):
+    sensor_values = {'electrode': None, 'light': None, 'soil': None, 'temperature': None, 'humidity': None}
+    while None in sensor_values.values():
+        data = arduino.readline().decode('utf-8').strip()
+        for line in data.split('\n'):
+            if ':' in line:
+                key, value = line.split(':')
+                if key.strip() in sensor_values:
+                    sensor_values[key.strip()] = int(float(value.strip()))
+    return sensor_values

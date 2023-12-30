@@ -2,9 +2,10 @@ from pyo import *
 import time
 import random
 import threading
+import reader as asr
 
 # SERVER AND GLOBAL VARIABLES
-s = Server().boot()
+s = Server(duplex=0).boot()
 s.amp = 0.1
 chorus_depth_melo = 0.2
 chorus_depth_harmo = 0.7
@@ -16,39 +17,23 @@ last_significant_change_time = time.time()
 melody_freq = Sig(value=100)
 harmony_freq = Sig(value=100)
 mul_obj = Sig(0.6)
+lfo = Sine(freq=0.2).range(1000, 5000)
 major_scale = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]
 minor_scale = [261.63, 293.66, 311.13, 349.23, 392.00, 415.30, 466.16, 523.25]
 threshold = 50
 env = Adsr(attack=0.6, decay=0.2, sustain=0.3, release=0.5, mul=mul_obj).play()
 
+arduino = asr.init_arduino('/dev/cu.usbmodem11201')
 # SENSOR READING FUNCTIONS
 
 
 def read_value():
-    with open("value.txt", "r") as file:
-        return int(file.read().strip())
-
-
-def read_light_sensor():
-    # Replace with actual sensor reading logic
-    return random.randint(90, 100)
-
-
-def read_moisture_sensor():
-    # Replace with actual sensor reading logic
-    return random.randint(0, 100)
-
-
-def read_temperature_sensor():
-    # Replace with actual sensor reading logic
-    return random.randint(0, 100)
-
-
-def read_humidity_sensor():
-    # Replace with actual sensor reading logic
-    return random.randint(0, 100)
+    sensor_data = asr.read_sensor_data(arduino)
+    return sensor_data
 
 # MAPPING FUNCTIONS
+
+
 def shift_octave(frequency, octave_change):
     return frequency * (2 ** octave_change)
 
@@ -68,52 +53,69 @@ def map_value(input_value, input_min, input_max, output_min, output_max):
     return (input_value - input_min) / (input_max - input_min) * (output_max - output_min) + output_min
 
 
+def map_soil_moisture_to_lfo_range(soil_moisture):
+    # Example: Lower moisture narrows the range, higher moisture broadens it
+    min_freq = map_value(soil_moisture, 0, 100, 500, 1000)  # Adjust these values as needed
+    max_freq = map_value(soil_moisture, 0, 100, 3000, 5000) # Adjust these values as needed
+    return min_freq, max_freq
+
 # MAIN THREAD
 def read_value_thread():
+    global lfo
     global last_value
     global last_significant_change_time
     global chorus_depth_melo
     global chorus_depth_harmo
     global reverb_size_melo
     global reverb_size_harmo
-    light_value = read_light_sensor()
+    light_value = read_value()['light']
+    soil_moisture = read_soil_moisture()
     scale = get_scale(light_value)
     counter = 0
 
     while True:
         current_value = read_value()
         # TO REMOVE
-        current_value = current_value + random.randint(-2, 2)
+        # current_value = current_value + random.randint(-2, 2)
         last_value = harmony_freq.get()
 
         if counter % random.randint(5, 10) == 0:
-            mapped_value = map_adc_to_scale(current_value, scale)
+            mapped_value = map_adc_to_scale(current_value['electrode'], scale)
         else:
             mapped_value = harmony_freq.get()
 
         # Update the freq_obj's value to change the frequency of the sine waves
         # Shift melody one octave higher
-        melody_freq.setValue(shift_octave(mapped_value, 0))
+            melody_freq.setValue(shift_octave(mapped_value, 0))
+            if light_value > 50:
+                melody_freq.setValue(shift_octave(mapped_value, 1))
 
-        if counter % 25 == 0:
+        if counter % 20 == 0:
             harmony_freq.setValue(shift_octave(mapped_value, -1))
 
         chorus_depth_harmo = map_value(harmony_freq, 100, 900, 0.4, 1)
         chorus_depth_melo = map_value(melody_freq, 100, 900, 0.1, 0.6)
         reverb_size_harmo = map_value(harmony_freq, 100, 900, 0.6, 1)
-        reverb_size_melo = map_value(melody_freq, 100, 900, 0.2, read_humidity_sensor()/100)
-        print(f"ADC Value: {current_value}, Mapped Frequency: {mapped_value}")
+        reverb_size_melo = map_value(
+            melody_freq, 100, 900, 0.2, current_value['humidity']/100)
+        lfo_min, lfo_max = map_soil_moisture_to_lfo_range(soil_moisture)
+        lfo.range(lfo_min, lfo_max)
+        print(
+            f"ADC Value: {current_value['electrode']}, Mapped Frequency: {mapped_value}")
 
         counter += 1
 
-        time.sleep((current_value/1000) ** current_value /
-                   light_value + random.uniform(0.05, 0.2))
+        time.sleep((-(current_value['electrode']/500)) ** current_value['electrode'] /
+                   50 + random.uniform(0.05, 0.2) + 0.5)
 
 
 # FREQ CHANGE FUNCTION
 def check_freq_change():
     global last_significant_change_time
-    diff = abs(harmony_freq.get() - last_value)
+    print('melody_freq', melody_freq.get())
+    print('last_value', last_value)
+    diff = abs(melody_freq.get() - last_value)
+    print('diff', diff)
     if diff > threshold:
         mul_obj.setValue(0.9)
         env.play()
@@ -126,9 +128,9 @@ def check_freq_change():
 
 # MAIN LOGIC AND SYNTHESIS
 # Use a Metro to regularly check the difference
-metro = Metro(time=0.1).play()
+metro = Metro(time=read_value()['temperature']/100).play()
 trig_func = TrigFunc(metro, function=check_freq_change)
-if read_humidity_sensor() < 50:
+if read_value()['humidity'] < 50:
     melody_synth = SineLoop(freq=melody_freq, mul=env)
 else:
     melody_synth = SuperSaw(freq=melody_freq, mul=env)
@@ -158,7 +160,7 @@ delay_melo = SmoothDelay(reverb_melo, delay=0.5,
                          feedback=0.05, maxdelay=1).out()
 delay_harmo = SmoothDelay(reverb_harmo, delay=0.6, feedback=0.3, maxdelay=2)
 # A slow-moving low-pass filter for a sweeping effect
-lfo = Sine(freq=0.2).range(1000, 5000)
+# lfo = Sine(freq=0.2).range(1000, 5000)
 lpf = ButLP(delay_harmo, freq=lfo).out()
 
 # Display

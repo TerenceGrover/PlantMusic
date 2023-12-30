@@ -2,16 +2,19 @@ from pyo import *
 import time
 import random
 import threading
+import reader as asr
 
 s = Server().boot()
 s.amp = 0.1
 
 global counter
 counter = 0
+arduino = asr.init_arduino('/dev/cu.usbmodem1301')
+
 
 def read_value():
-    with open("value.txt", "r") as file:
-        return int(file.read().strip())
+    sensor_data = asr.read_sensor_data(arduino)
+    return sensor_data['electrode']
 
 last_value = 100
 
