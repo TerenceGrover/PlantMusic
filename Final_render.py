@@ -11,7 +11,7 @@ chorus_depth_melo = 0.2
 chorus_depth_harmo = 0.7
 reverb_size_melo = 0.2
 reverb_size_harmo = 0.7
-feedback = Sine(0.1, 0, 0.5, 0.5)
+feedback = Sine(0.1, 0, 0.5 , 0.5)
 last_value = 100
 last_significant_change_time = time.time()
 melody_freq = Sig(value=100)
@@ -121,9 +121,9 @@ def check_freq_change():
         mul_obj.setValue(0.9)
         env.play()
         last_significant_change_time = time.time()
-    elif time.time() - last_significant_change_time > 5:  # 3 seconds without significant change
+    elif time.time() - last_significant_change_time > 5:  # if 5 seconds without significant change
         current_mul = mul_obj.value
-        # Decrease the amplitude by 10% every check
+        # Decrease the amplitude by 10% every check to allow for a smooth fade-out and not hear the same sound forever
         mul_obj.setValue(current_mul * 0.9)
 
 
